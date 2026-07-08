@@ -1,2 +1,169 @@
 # Loan-Calculator
 a tool that can be used to calculate how much someone qualifies as for a loan
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Loan Calculator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 480px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #1f2937;
+    }
+    h1 {
+      font-size: 22px;
+      margin-bottom: 4px;
+    }
+    p.subtitle {
+      color: #6b7280;
+      margin-top: 0;
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+    label {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      margin-bottom: 16px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    #result {
+      margin-top: 24px;
+      padding: 16px;
+      background-color: #f3f4f6;
+      border-radius: 8px;
+      display: none;
+    }
+    #result.visible {
+      display: block;
+    }
+    .result-line {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 14px;
+    }
+    .result-line span:first-child {
+      color: #6b7280;
+    }
+    .result-line span:last-child {
+      font-weight: 700;
+    }
+    .tier-badge {
+      display: inline-block;
+      background-color: #dbeafe;
+      color: #1e40af;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+    .description {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #374151;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid #d1d5db;
+    }
+    .error {
+      color: #dc2626;
+      font-size: 14px;
+    }
+    #rangeHint {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: -12px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1> Ln Calculator</h1>
+  <p class="subtitle">Estimates weekly installments and total repayment based on loan tier.</p>
+
+  <form id="loanForm">
+    <label>Loan Amount (UGX)</label>
+    <input type="number" id="amount" required min="1">
+    <div id="rangeHint">Tiers: Small loan 700K–3.999M · Small business loan 4M–7.999M</div>
+
+    <button type="submit">Calculate</button>
+  </form>
+
+  <div id="result"></div>
+
+  <script>
+    // Loan tiers: amounts in UGX, duration in months/weeks, rate = total interest over the full term
+    const TIERS = [
+      { name: "Small loan",          min: 700000,  max: 3999999, months: 4, weeks: 16, rate: 0.09 },
+      { name: "Small business loan", min: 4000000, max: 7999999, months: 6, weeks: 23, rate: 0.15 },
+    ];
+
+    function findTier(amount) {
+      return TIERS.find(t => amount >= t.min && amount <= t.max) || null;
+    }
+
+    document.getElementById("loanForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      const amount = parseFloat(document.getElementById("amount").value);
+      const resultDiv = document.getElementById("result");
+
+      const tier = findTier(amount);
+
+      if (!tier) {
+        resultDiv.className = "visible";
+        resultDiv.innerHTML = `<p class="error">This amount doesn't fall within any loan tier (700,000 – 7,999,999 UGX).</p>`;
+        return;
+      }
+
+      const totalInterest = amount * tier.rate;
+      const totalRepayment = amount + totalInterest;
+      const weeklyInstallment = totalRepayment / tier.weeks;
+
+      const fmt = (num) => Math.round(num).toLocaleString("en-UG");
+
+      const description = `This loan falls under the <strong>${tier.name}</strong> category. ` +
+        `For a principal of UGX ${fmt(amount)}, the borrower will repay over ${tier.months} months ` +
+        `(${tier.weeks} weekly installments) at a total interest rate of ${(tier.rate * 100).toFixed(0)}%. ` +
+        `This works out to a total interest charge of UGX ${fmt(totalInterest)}, bringing total repayment to ` +
+        `UGX ${fmt(totalRepayment)}, paid in weekly installments of approximately UGX ${fmt(weeklyInstallment)}.`;
+
+      resultDiv.className = "visible";
+      resultDiv.innerHTML = `
+        <div class="tier-badge">${tier.name}</div>
+        <div class="result-line"><span>Loan amount:</span><span>UGX ${fmt(amount)}</span></div>
+        <div class="result-line"><span>Duration:</span><span>${tier.months} months (${tier.weeks} weeks)</span></div>
+        <div class="result-line"><span>Interest rate:</span><span>${(tier.rate * 100).toFixed(0)}%</span></div>
+        <div class="result-line"><span>Total interest:</span><span>UGX ${fmt(totalInterest)}</span></div>
+        <div class="result-line"><span>Total repayment:</span><span>UGX ${fmt(totalRepayment)}</span></div>
+        <div class="result-line"><span>Weekly installment:</span><span>UGX ${fmt(weeklyInstallment)}</span></div>
+        <div class="description">${description}</div>
+      `;
+    });
+  </script>
+</body>
+</html>
