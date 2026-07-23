@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>malcom's Calculator</title>
+  <title>PesaCalc</title>
   <style>
     * { box-sizing: border-box; }
 
@@ -10,13 +10,11 @@
       margin: 0;
       min-height: 100vh;
       display: flex;
-      align-items: flex-start;
-      justify-content: center;
+      flex-direction: column;
+      align-items: center;
       padding: 48px 16px;
       color: #1f2937;
 
-      /* Deep teal base with a subtle radial glow, plus a faint
-         repeating coin/dot pattern for texture instead of flat color */
       background-color: #0d3b3a;
       background-image:
         radial-gradient(circle at 20% 15%, rgba(212,160,23,0.18) 0%, transparent 45%),
@@ -33,10 +31,16 @@
       border-radius: 14px;
       box-shadow: 0 20px 45px rgba(0,0,0,0.35);
       border-top: 4px solid #d4a017;
+      margin-bottom: 28px;
     }
 
     h1 {
       font-size: 22px;
+      margin-bottom: 4px;
+      color: #0d3b3a;
+    }
+    h2 {
+      font-size: 18px;
       margin-bottom: 4px;
       color: #0d3b3a;
     }
@@ -79,14 +83,14 @@
     button:hover {
       background-color: #145c54;
     }
-    #result {
+    #result, #planResult {
       margin-top: 24px;
       padding: 16px;
       background-color: #f3f4f6;
       border-radius: 8px;
       display: none;
     }
-    #result.visible {
+    #result.visible, #planResult.visible {
       display: block;
     }
     .result-line {
@@ -119,6 +123,33 @@
       padding-top: 14px;
       border-top: 1px solid #d1d5db;
     }
+    .apr-note {
+      font-size: 12px;
+      line-height: 1.5;
+      color: #6b7280;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed #d1d5db;
+      font-style: italic;
+    }
+    .math-box {
+      font-family: 'Courier New', monospace;
+      font-size: 12.5px;
+      background-color: #0d3b3a;
+      color: #e5f3f1;
+      padding: 12px 14px;
+      border-radius: 8px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+      white-space: pre;
+    }
+    .graph-box {
+      background-color: #ffffff;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 16px;
+    }
     .error {
       color: #dc2626;
       font-size: 14px;
@@ -129,11 +160,19 @@
       margin-top: -12px;
       margin-bottom: 16px;
     }
+    .constraint-hint {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: -12px;
+      margin-bottom: 16px;
+    }
   </style>
 </head>
 <body>
+
+  <!-- ================= LOAN CALCULATOR ================= -->
   <div class="card">
-    <h1>malcom's Calculator</h1>
+    <h1>PesaCalc</h1>
     <p class="subtitle">Estimates weekly installments and total repayment based on loan tier.</p>
 
     <form id="loanForm">
@@ -147,12 +186,30 @@
     <div id="result"></div>
   </div>
 
+  <!-- ================= PORTFOLIO PLANNER ================= -->
+  <div class="card">
+    <h2>Portfolio Planner</h2>
+    <p class="subtitle">Optimal capital allocation across loan tiers to maximize interest revenue (linear programming).</p>
+
+    <form id="planForm">
+      <label for="capital">Total Capital Pool (UGX)</label>
+      <input type="number" id="capital" required min="1">
+      <div class="constraint-hint">Constraint: at least 30% of capital must go to Small loans</div>
+
+      <button type="submit">Optimize Allocation</button>
+    </form>
+
+    <div id="planResult"></div>
+  </div>
+
   <script>
-    // Loan tiers: amounts in UGX, duration in months/weeks, rate = total interest over the full term
+    // ============ LOAN CALCULATOR LOGIC ============
     const TIERS = [
       { name: "Small loan",          min: 700000,  max: 3999999, months: 4, weeks: 16, rate: 0.09 },
       { name: "Small business loan", min: 4000000, max: 7999999, months: 6, weeks: 23, rate: 0.15 },
     ];
+
+    const PAYMENTS_PER_YEAR = 52; // weekly installments
 
     function findTier(amount) {
       return TIERS.find(t => amount >= t.min && amount <= t.max) || null;
@@ -176,7 +233,10 @@
       const totalRepayment = amount + totalInterest;
       const weeklyInstallment = totalRepayment / tier.weeks;
 
+      const apr = (2 * PAYMENTS_PER_YEAR * totalInterest) / (amount * (tier.weeks + 1));
+
       const fmt = (num) => Math.round(num).toLocaleString("en-UG");
+      const fmtPct = (num) => (num * 100).toFixed(1);
 
       const description = `This loan falls under the <strong>${tier.name}</strong> category. ` +
         `For a principal of UGX ${fmt(amount)}, the borrower will repay over ${tier.months} months ` +
@@ -184,16 +244,142 @@
         `This works out to a total interest charge of UGX ${fmt(totalInterest)}, bringing total repayment to ` +
         `UGX ${fmt(totalRepayment)}, paid in weekly installments of approximately UGX ${fmt(weeklyInstallment)}.`;
 
+      const aprNote = `Because interest here is charged flat on the original principal rather than on the ` +
+        `declining balance, the true annualized cost of this loan is higher than the stated ${(tier.rate * 100).toFixed(0)}% ` +
+        `flat rate. Accounting for the fact that the balance owed reduces with each installment, the ` +
+        `estimated effective annual interest rate (APR) is approximately <strong>${fmtPct(apr)}%</strong>.`;
+
       resultDiv.className = "visible";
       resultDiv.innerHTML = `
         <div class="tier-badge">${tier.name}</div>
         <div class="result-line"><span>Loan amount:</span><span>UGX ${fmt(amount)}</span></div>
         <div class="result-line"><span>Duration:</span><span>${tier.months} months (${tier.weeks} weeks)</span></div>
-        <div class="result-line"><span>Interest rate:</span><span>${(tier.rate * 100).toFixed(0)}%</span></div>
+        <div class="result-line"><span>Flat interest rate:</span><span>${(tier.rate * 100).toFixed(0)}%</span></div>
         <div class="result-line"><span>Total interest:</span><span>UGX ${fmt(totalInterest)}</span></div>
         <div class="result-line"><span>Total repayment:</span><span>UGX ${fmt(totalRepayment)}</span></div>
         <div class="result-line"><span>Weekly installment:</span><span>UGX ${fmt(weeklyInstallment)}</span></div>
+        <div class="result-line"><span>Effective annual rate (APR):</span><span>~${fmtPct(apr)}%</span></div>
         <div class="description">${description}</div>
+        <div class="apr-note">${aprNote}</div>
+      `;
+    });
+
+    // ============ PORTFOLIO PLANNER (LINEAR PROGRAMMING) LOGIC ============
+    // Decision variables:
+    //   x1 = capital allocated to Small loans (rate r1)
+    //   x2 = capital allocated to Small business loans (rate r2)
+    // Objective:  Maximize Z = r1*x1 + r2*x2
+    // Constraints:
+    //   x1 + x2 <= C          (total capital pool)
+    //   x1 >= MIN_SHARE * C   (minimum allocation to Small loans)
+    //   x1, x2 >= 0
+    //
+    // Since r2 > r1, revenue is maximized by allocating the MINIMUM
+    // permitted amount to the lower-rate tier (x1) and pushing all
+    // remaining capital into the higher-rate tier (x2). This is the
+    // binding corner-point solution of the feasible region.
+
+    const R1 = TIERS[0].rate; // Small loan rate: 0.09
+    const R2 = TIERS[1].rate; // Small business loan rate: 0.15
+    const MIN_SHARE = 0.30;   // at least 30% must go to Small loans
+
+    // Builds an SVG plotting the feasible region (in % terms) and the
+    // optimal corner point. Geometry is fixed since it's expressed as
+    // percentages of capital, not absolute UGX amounts.
+    function buildFeasibleRegionSVG() {
+      const originX = 80, originY = 350;
+      const axisLenX = 520, axisLenY = 310;
+
+      // Convert (x1%, x2%) -> pixel coords
+      const px = (x1pct) => originX + (x1pct / 100) * axisLenX;
+      const py = (x2pct) => originY - (x2pct / 100) * axisLenY;
+
+      const minSharePct = MIN_SHARE * 100;
+      const optX1 = minSharePct;
+      const optX2 = 100 - minSharePct;
+
+      const vertexA = [px(minSharePct), py(0)];          // (30, 0)
+      const vertexB = [px(minSharePct), py(optX2)];       // (30, 70) - optimal
+      const vertexC = [px(100), py(0)];                   // (100, 0)
+
+      return `
+      <svg width="100%" viewBox="0 0 640 400" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="${vertexA[0]},${vertexA[1]} ${vertexB[0]},${vertexB[1]} ${vertexC[0]},${vertexC[1]}"
+                 fill="#9FE1CB" fill-opacity="0.5" stroke="#0F6E56" stroke-width="1"/>
+
+        <line x1="${originX}" y1="${originY}" x2="${originX + axisLenX + 15}" y2="${originY}" stroke="#374151" stroke-width="1"/>
+        <line x1="${originX}" y1="${originY}" x2="${originX}" y2="${originY - axisLenY - 15}" stroke="#374151" stroke-width="1"/>
+        <text x="${originX + axisLenX - 100}" y="${originY + 24}" font-size="11" fill="#6b7280">x1 - % to Small loans</text>
+        <text x="${originX + 6}" y="${originY - axisLenY - 4}" font-size="11" fill="#6b7280">x2 - % to Small business</text>
+
+        <line x1="${px(0)}" y1="${py(100)}" x2="${px(100)}" y2="${py(0)}" stroke="#92660a" stroke-width="1.2"/>
+        <text x="${px(65)}" y="${py(55)}" font-size="11" fill="#92660a">x1 + x2 = 100%</text>
+
+        <line x1="${px(minSharePct)}" y1="${py(0)}" x2="${px(minSharePct)}" y2="${py(100)}"
+              stroke="#0F6E56" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="${px(minSharePct) + 6}" y="${py(85)}" font-size="11" fill="#0F6E56">x1 >= 30%</text>
+
+        <text x="${px(minSharePct) - 12}" y="${originY + 16}" font-size="10" fill="#6b7280">30</text>
+        <text x="${px(100) - 10}" y="${originY + 16}" font-size="10" fill="#6b7280">100</text>
+
+        <circle cx="${px(optX1)}" cy="${py(optX2)}" r="5" fill="#d4a017" stroke="#92660a" stroke-width="1"/>
+        <text x="${px(optX1) + 10}" y="${py(optX2) - 6}" font-size="11" font-weight="bold" fill="#0d3b3a">Optimal point</text>
+        <text x="${px(optX1) + 10}" y="${py(optX2) + 10}" font-size="10" fill="#374151">${optX1}% small loans, ${optX2}% small business</text>
+      </svg>`;
+    }
+
+    document.getElementById("planForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      const capital = parseFloat(document.getElementById("capital").value);
+      const planDiv = document.getElementById("planResult");
+
+      if (!capital || capital <= 0) {
+        planDiv.className = "visible";
+        planDiv.innerHTML = `<p class="error">Please enter a valid capital amount.</p>`;
+        return;
+      }
+
+      const x1 = MIN_SHARE * capital;
+      const x2 = capital - x1;
+
+      const revenue = (R1 * x1) + (R2 * x2);
+
+      const naiveX1 = capital * 0.5;
+      const naiveX2 = capital * 0.5;
+      const naiveRevenue = (R1 * naiveX1) + (R2 * naiveX2);
+
+      const gain = revenue - naiveRevenue;
+
+      const fmt = (num) => Math.round(num).toLocaleString("en-UG");
+      const fmtPct = (num) => (num * 100).toFixed(0);
+
+      const mathBox =
+`Maximize:  Z = ${R1}x₁ + ${R2}x₂
+Subject to:
+  x₁ + x₂ ≤ ${fmt(capital)}
+  x₁ ≥ ${fmtPct(MIN_SHARE)}% of ${fmt(capital)}
+  x₁, x₂ ≥ 0
+
+Optimal corner point:
+  x₁ = ${fmt(x1)}   (Small loans)
+  x₂ = ${fmt(x2)}   (Small business loans)
+  Z  = ${fmt(revenue)}  (max revenue)`;
+
+      planDiv.className = "visible";
+      planDiv.innerHTML = `
+        <div class="math-box">${mathBox}</div>
+        <div class="graph-box">${buildFeasibleRegionSVG()}</div>
+        <div class="result-line"><span>Allocate to Small loans:</span><span>UGX ${fmt(x1)}</span></div>
+        <div class="result-line"><span>Allocate to Small business loans:</span><span>UGX ${fmt(x2)}</span></div>
+        <div class="result-line"><span>Projected total interest revenue:</span><span>UGX ${fmt(revenue)}</span></div>
+        <div class="description">
+          This is the revenue-maximizing split given the constraint that at least ${fmtPct(MIN_SHARE)}% of capital
+          must go to Small loans. Because Small business loans earn a higher flat rate (${(R2*100).toFixed(0)}%
+          vs ${(R1*100).toFixed(0)}%), the optimizer allocates the minimum required amount to Small loans and
+          directs the rest to Small business loans. Compared to a naive 50/50 split (which would yield
+          UGX ${fmt(naiveRevenue)}), this allocation earns an additional UGX ${fmt(gain)} in projected revenue.
+        </div>
       `;
     });
   </script>
